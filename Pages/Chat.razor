@@ -1,0 +1,117 @@
+﻿@page "/chatRoom"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<h3>聊天室</h3>
+
+<div class="form-group">
+    <label>
+        发送用户:
+        <input @bind="User">
+    </label>
+</div>
+
+<div class="form-group">
+    <label>
+        消息内容:
+        <input @bind="Message">
+    </label>
+</div>
+
+<button @onclick="SendMessage" disabled="@(!IsConnectioned)" >发送</button>
+
+<br/>
+
+<ul>
+    @foreach (var message in MessageList)
+    {
+        <li>@message</li>
+    }
+</ul>
+
+@code {
+
+    /// <summary>
+    /// 发送用户
+    /// </summary>
+    /// <value></value>
+    public string User { get; set; }
+
+    /// <summary>
+    /// 消息内容
+    /// </summary>
+    /// <value></value>
+    public string Message { get; set; }
+
+    /// <summary>
+    /// 发送消息
+    /// </summary>
+    public async Task SendMessage()
+    {
+        // 判断输入是否合法
+        if(!string.IsNullOrEmpty(User) && !string.IsNullOrEmpty(Message))
+        {
+            // 发送消息，方法名为"SendMessage"，和"ChatHub"中方法名定义需一致。
+            await hubConnection.SendAsync("SendMessage", User, Message);
+        }
+    }
+
+    /// <summary>
+    /// 消息列表
+    /// </summary>
+    /// <typeparam name="string"></typeparam>
+    /// <returns></returns>
+    public List<string> MessageList { get; set; } = new List<string>();
+
+    /// <summary>
+    /// 集线器连接
+    /// </summary>
+    /// <value></value>
+    private HubConnection hubConnection { get; set; }
+
+    /// <summary>
+    /// 是否已连上集线器
+    /// </summary>
+    private bool IsConnectioned => 
+        hubConnection != null ? 
+        hubConnection.State == HubConnectionState.Connected : 
+        false;
+
+    /// <summary>
+    /// 组件初始化完成事件
+    /// </summary>
+    /// <returns></returns>
+    protected override async Task OnInitializedAsync()
+    {
+        // 定义聊天集线器（含终结点）
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // 接收集线器消息
+        hubConnection.On<string, string>("ReceiveMessage", (user, message)=>
+        {
+            var messageItem = $"发送用户：{user}，消息内容：{message}";
+            MessageList.Add(messageItem);
+            StateHasChanged();
+        });
+
+        // 开始连接集线器
+        await hubConnection.StartAsync();
+    }
+
+    /// <summary>
+    /// 退出组件销毁时事件
+    /// </summary>
+    /// <returns></returns>
+    public async ValueTask DisposeAsync()
+    {
+        // 关闭连接
+        await hubConnection.DisposeAsync();
+    }
+}
+
+
+        
